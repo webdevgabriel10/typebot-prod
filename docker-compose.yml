@@ -1,0 +1,67 @@
+
+volumes:
+  db-data:
+  evolution_store:
+  evolution_instances:
+
+services:
+  typebot-db:
+    image: postgres:14-alpine
+    restart: always
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=typebot
+      - POSTGRES_PASSWORD=typebot
+
+  typebot-builder:
+    image: baptistearno/typebot-builder:latest
+    restart: always
+    depends_on:
+      - typebot-db
+    ports:
+      - '8080:3000'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    env_file: .env
+
+  typebot-viewer:
+    image: baptistearno/typebot-viewer:latest
+    restart: always
+    depends_on:
+      - typebot-db
+    ports:
+      - '8081:3000'
+    env_file: .env
+
+  evolution-api:
+    image: atendai/evolution-api
+    command: ["node", "./dist/src/main.js"]
+    container_name: evolution_api
+    restart: always
+    ports:
+      - "8082:8080"
+    environment:
+      - AUTHENTICATION_API_KEY=cBEugz5dSIaIuWO6mAivCEXZE7rPhfaG
+    volumes:
+      - evolution_store:/evolution/store
+      - evolution_instances:/evolution/instances
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+  nginx:
+    image: nginx
+    depends_on:
+      typebot-builder:
+        condition: service_started
+      typebot-viewer:
+        condition: service_started
+      evolution-api:
+        condition: service_started
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    command: ["nginx", "-g", "daemon off;"]
+
